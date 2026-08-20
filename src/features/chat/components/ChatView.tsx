@@ -50,6 +50,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ vault, vaultState }) => {
     textareaRef,
     activeNode,
     handleSend,
+    handleEditUserMessage,
     handleNewChat,
     toggleContextInspector
   } = useChatLogic(vault, activeTabId);
@@ -227,6 +228,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ vault, vaultState }) => {
           mode={mode}
           activeNodeName={activeNode?.name}
           vaultState={vaultState}
+          isProcessing={isProcessing}
+          onEditMessage={handleEditUserMessage}
         />
 
         {/* FLOATING INPUT AREA */}

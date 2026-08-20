@@ -279,9 +279,13 @@ export function useLeftSidebarLogic({
   };
 
   const handleCreateNoteInFolder = (node: FileNode) => {
-    closeActiveDialog();
+    // Buka folder agar catatan baru terlihat di tree jika sidebar dibuka kembali
+    setCollapsedFolders((prev) => ({
+      ...prev,
+      [node.id]: false,
+    }));
+    setActiveMenuNode(null);
     onCreateNote(node.id);
-    onCloseMobile();
   };
 
   const handleCreateSubfolderInFolder = (node: FileNode) => {

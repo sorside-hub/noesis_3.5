@@ -63,6 +63,15 @@ export async function saveChatMessage(msg: ChatMessageRecord): Promise<void> {
   });
 }
 
+export async function deleteChatMessage(id: string): Promise<void> {
+  await db.chat_messages.delete(id);
+}
+
+export async function deleteChatMessages(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  await db.chat_messages.bulkDelete(ids);
+}
+
 export async function updateChatMessage(
   id: string,
   updates: Partial<ChatMessageRecord>

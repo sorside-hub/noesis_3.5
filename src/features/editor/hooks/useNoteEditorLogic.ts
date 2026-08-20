@@ -100,6 +100,7 @@ export function useNoteEditorLogic({
       navigateToNote(newId);
     }
     setMode('LIVE_EDIT');
+    closeMobileSidebar();
   };
 
   // Quick Scratchpad / Capture -> Otomatis masuk ke folder 00-Inbox
@@ -125,6 +126,7 @@ export function useNoteEditorLogic({
       navigateToNote(newId);
     }
     setMode('LIVE_EDIT');
+    closeMobileSidebar();
   };
 
   // Saat membuka / memilih catatan dari sidebar -> Otomatis masuk ke Mode Preview

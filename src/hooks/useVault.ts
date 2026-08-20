@@ -122,7 +122,7 @@ export const useVault = () => {
         parentId,
         content: '',
         metadata: {
-          status: 'Idea',
+          status: 'Draft',
           ...initialMetadata,
         },
         createdAt: Date.now(),

@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { 
   BrainCircuit, 
   Loader2, 
-  BookOpen, 
-  Eye, 
   ChevronDown, 
   ChevronRight, 
   Layers, 
   ExternalLink,
   Copy,
   Check,
-  FilePlus
+  FilePlus,
+  Pencil,
+  BookOpen
 } from 'lucide-react';
 import { ChatMessageRecord } from '../../../lib/db';
 import { ChatMode } from '../hooks/useChatLogic';
@@ -26,6 +26,8 @@ interface ChatMessageFeedProps {
   mode: ChatMode;
   activeNodeName?: string;
   vaultState?: ReturnType<typeof useVault>;
+  isProcessing?: boolean;
+  onEditMessage?: (userMsgId: string, newContent: string) => void;
 }
 
 export const ChatMessageFeed: React.FC<ChatMessageFeedProps> = ({
@@ -34,7 +36,9 @@ export const ChatMessageFeed: React.FC<ChatMessageFeedProps> = ({
   messagesEndRef,
   mode,
   activeNodeName,
-  vaultState
+  vaultState,
+  isProcessing = false,
+  onEditMessage
 }) => {
   const { navigateToNote, navigateView } = useNavigation();
   
@@ -43,6 +47,10 @@ export const ChatMessageFeed: React.FC<ChatMessageFeedProps> = ({
   
   // Local state for copy notification
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
+  // Local state for inline user message editing
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<string>('');
 
   const toggleTab = (msgId: string, tab: 'sources' | 'chunks') => {
     setActiveTabMap((prev) => ({
@@ -57,6 +65,23 @@ export const ChatMessageFeed: React.FC<ChatMessageFeedProps> = ({
     setTimeout(() => {
       setCopiedMsgId(null);
     }, 2000);
+  };
+
+  const startEditing = (msgId: string, content: string) => {
+    setEditingMsgId(msgId);
+    setEditDraft(content);
+  };
+
+  const cancelEditing = () => {
+    setEditingMsgId(null);
+    setEditDraft('');
+  };
+
+  const submitEdit = (msgId: string) => {
+    if (!editDraft.trim() || isProcessing) return;
+    onEditMessage?.(msgId, editDraft.trim());
+    setEditingMsgId(null);
+    setEditDraft('');
   };
 
   const handleCreateNoteFromMsg = (msgContent: string) => {
@@ -106,11 +131,80 @@ export const ChatMessageFeed: React.FC<ChatMessageFeedProps> = ({
           uniqueMessages.map((msg) => (
             <div key={msg.id} className="w-full space-y-3">
               {msg.role === 'user' ? (
-                <div className="flex justify-end">
-                  <div className="bg-bg-surface border border-border-default text-text-primary rounded-2xl px-4 py-2.5 max-w-[85%] sm:max-w-[75%] shadow-xs text-sm font-sans leading-relaxed break-words">
-                    {msg.content}
+                editingMsgId === msg.id ? (
+                  /* Inline Editing Mode */
+                  <div className="flex flex-col items-end w-full space-y-2">
+                    <div className="w-full sm:max-w-[85%] bg-bg-surface border border-accent-primary/60 rounded-2xl p-3 shadow-md space-y-2.5">
+                      <textarea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            e.preventDefault();
+                            submitEdit(msg.id);
+                          }
+                        }}
+                        rows={Math.max(2, Math.min(8, editDraft.split('\n').length))}
+                        className="w-full bg-bg-primary/60 border border-border-default rounded-xl p-2.5 text-sm text-text-primary outline-hidden focus:border-accent-primary resize-none font-sans leading-relaxed"
+                        placeholder="Edit pesan Anda..."
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-end gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={cancelEditing}
+                          className="px-3 py-1.5 rounded-lg border border-border-default bg-bg-primary hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer font-medium"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => submitEdit(msg.id)}
+                          disabled={!editDraft.trim() || isProcessing}
+                          className="px-3.5 py-1.5 rounded-lg bg-text-primary text-bg-surface hover:opacity-90 disabled:opacity-40 transition-all cursor-pointer font-medium shadow-xs"
+                        >
+                          Kirim Ulang
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* Standard User Bubble with Edit & Copy buttons beneath, aligned right */
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex justify-end w-full">
+                      <div className="bg-bg-surface border border-border-default text-text-primary rounded-2xl px-4 py-2.5 max-w-[85%] sm:max-w-[75%] shadow-xs text-sm font-sans leading-relaxed break-words whitespace-pre-wrap">
+                        {msg.content}
+                      </div>
+                    </div>
+
+                    {/* Action buttons below the bubble on the far right */}
+                    <div className="flex items-center gap-1 pt-0.5">
+                      {onEditMessage && (
+                        <button
+                          type="button"
+                          onClick={() => startEditing(msg.id, msg.content)}
+                          disabled={isProcessing}
+                          className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer disabled:opacity-30"
+                          title="Edit pesan"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(msg.id, msg.content)}
+                        className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
+                        title={copiedMsgId === msg.id ? 'Tersalin!' : 'Salin pesan'}
+                      >
+                        {copiedMsgId === msg.id ? (
+                          <Check size={12} className="text-accent-primary" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className="w-full space-y-3 pt-1">
                   {msg.content ? (

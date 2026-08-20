@@ -12,7 +12,8 @@ import {
   renameChatSession, 
   deleteChatSession, 
   getSessionMessages, 
-  saveChatMessage 
+  saveChatMessage,
+  deleteChatMessages 
 } from '../services/chatStorage';
 
 export type ChatMode = 'rag' | 'current';
@@ -236,6 +237,11 @@ export function useChatLogic(vault: VaultData, activeTabId: string | null) {
       );
     }
 
+    await runAiPipeline(query, aiMsg);
+  }, [input, activeSessionId, sessions, messages.length, mode, topK, threshold, activeNode]);
+
+  // Core AI Stream Pipeline (Reusable for both standard send and message editing)
+  const runAiPipeline = useCallback(async (query: string, aiMsg: ChatMessageRecord) => {
     try {
       const customKeys = getAllLocalKeyOverrides();
 
@@ -357,7 +363,7 @@ TUGAS ANDA:
               fullContent += textChunk;
               setMessages((prev) =>
                 prev.map((msg) =>
-                  msg.id === aiMsgId ? { ...msg, content: fullContent } : msg
+                  msg.id === aiMsg.id ? { ...msg, content: fullContent } : msg
                 )
               );
             }
@@ -379,7 +385,7 @@ TUGAS ANDA:
 
       await saveChatMessage(finalAiMsg);
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === aiMsgId ? finalAiMsg : msg))
+        prev.map((msg) => (msg.id === aiMsg.id ? finalAiMsg : msg))
       );
     } catch (err) {
       console.error('Chat error:', err);
@@ -389,13 +395,64 @@ TUGAS ANDA:
       };
       await saveChatMessage(errAiMsg);
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === aiMsgId ? errAiMsg : msg))
+        prev.map((msg) => (msg.id === aiMsg.id ? errAiMsg : msg))
       );
     } finally {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
-  }, [input, activeSessionId, sessions, messages.length, mode, topK, threshold, activeNode]);
+  }, [mode, topK, threshold, activeNode]);
+
+  // Edit User Message & Regenerate from that point
+  const handleEditUserMessage = useCallback(async (userMsgId: string, newContent: string) => {
+    const query = newContent.trim();
+    if (!query || isProcessingRef.current || !activeSessionId) return;
+
+    isProcessingRef.current = true;
+    setIsProcessing(true);
+
+    const msgIdx = messages.findIndex((m) => m.id === userMsgId);
+    if (msgIdx === -1) {
+      isProcessingRef.current = false;
+      setIsProcessing(false);
+      return;
+    }
+
+    // Delete subsequent messages from DB
+    const subsequentMsgs = messages.slice(msgIdx + 1);
+    const idsToDelete = subsequentMsgs.map((m) => m.id);
+    if (idsToDelete.length > 0) {
+      try {
+        await deleteChatMessages(idsToDelete);
+      } catch (err) {
+        console.error('Failed to delete subsequent messages:', err);
+      }
+    }
+
+    // Update the target user message
+    const targetMsg = messages[msgIdx];
+    const updatedUserMsg: ChatMessageRecord = {
+      ...targetMsg,
+      content: query,
+      createdAt: new Date().toISOString(),
+    };
+    await saveChatMessage(updatedUserMsg);
+
+    // Create new AI response placeholder
+    const aiMsgId = `msg_${crypto.randomUUID()}_ai`;
+    const newAiMsg: ChatMessageRecord = {
+      id: aiMsgId,
+      sessionId: activeSessionId,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+    };
+
+    const keptBefore = messages.slice(0, msgIdx);
+    setMessages([...keptBefore, updatedUserMsg, newAiMsg]);
+
+    await runAiPipeline(query, newAiMsg);
+  }, [activeSessionId, messages, runAiPipeline]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -422,6 +479,7 @@ TUGAS ANDA:
     textareaRef,
     activeNode,
     handleSend,
+    handleEditUserMessage,
     handleNewChat,
     toggleContextInspector
   };
